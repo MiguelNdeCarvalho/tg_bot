@@ -6,7 +6,7 @@ from typing import Optional, List
 
 import requests
 from telegram import Message, Chat, Update, Bot, MessageEntity
-from telegram import ParseMode
+from telegram import ParseMode, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CommandHandler, run_async, Filters
 from telegram.utils.helpers import escape_markdown, mention_html
 
@@ -131,6 +131,8 @@ HIT = (
 
 GMAPS_LOC = "https://maps.googleapis.com/maps/api/geocode/json"
 GMAPS_TIME = "https://maps.googleapis.com/maps/api/timezone/json"
+
+AOSCP_API = "http://dev.cypheros.co/api/"
 
 
 @run_async
@@ -360,6 +362,37 @@ def markdown_help(bot: Bot, update: Update):
 def stats(bot: Bot, update: Update):
     update.effective_message.reply_text("Current stats:\n" + "\n".join([mod.__stats__() for mod in STATS]))
 
+@run_async
+def getaoscp(bot: Bot, update: Update, args: List[str]):
+    device = " ".join(args).lower()
+    data = requests.get(AOSCP_API + "getDownloadInfo", {"device": device})
+
+    if len(data.text) > 0:
+        data = data.json()
+
+        message = "*" + data["Name"] + " - " + data["Device"] + "*\n \
+                 \n*Version:* " + data["Version"] + " \
+                 \n*Date:* " + data["Build"] + " \
+                 \n*Size:* " + data["Size"] + " \
+                 \n*MD5:* " + data["MD5"]
+
+        if "Maintainers" in data:
+            if len(data["Maintainers"]) > 1:
+                message_text += "\n\n*Maintainers:* " + data["Maintainers"][0]
+
+            for maintainer in data["Maintainers"][1:-1]:
+                message_text += ", " + maintainer
+
+            message_text += " and " + data["Maintainers"][-1]
+        else:
+            message_text += "\n\n*Maintainer:* " + data["Maintainers"][0]
+
+        update.effective_message.reply_text(message,
+                                            parse_mode=ParseMode.MARKDOWN,
+                                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(text="Download", url=data["URL"])]]))
+    else:
+        update.effective_message.reply_text("No builds available for " + device)
+
 
 # /ip is for private use
 __help__ = """
@@ -368,6 +401,7 @@ __help__ = """
  - /slap: slap a user, or get slapped if not a reply.
  - /time <place>: gives the local time at the given place.
  - /info: get information about a user.
+ - /getaoscp <device codename>: gives details of latest official build for the entered device.
 
  - /markdownhelp: quick summary of how markdown works in telegram - can only be called in private chats.
 """
@@ -388,6 +422,8 @@ MD_HELP_HANDLER = CommandHandler("markdownhelp", markdown_help, filters=Filters.
 
 STATS_HANDLER = CommandHandler("stats", stats, filters=CustomFilters.sudo_filter)
 
+GETAOSCP_HANDLER = CommandHandler("getaoscp", getaoscp, pass_args=True)
+
 dispatcher.add_handler(ID_HANDLER)
 dispatcher.add_handler(IP_HANDLER)
 dispatcher.add_handler(TIME_HANDLER)
@@ -397,3 +433,4 @@ dispatcher.add_handler(INFO_HANDLER)
 dispatcher.add_handler(ECHO_HANDLER)
 dispatcher.add_handler(MD_HELP_HANDLER)
 dispatcher.add_handler(STATS_HANDLER)
+dispatcher.add_handler(GETAOSCP_HANDLER)
